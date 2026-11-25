@@ -1,0 +1,58 @@
+titre: Mini
+auteur: Tests
+resume: Livre minimal pour les tests du moteur.
+personnage:
+  stats:
+    habilete: 1d6+6
+    endurance: 2d6+12
+    chance: 1d6+6
+  inventaire: [épée]
+flags_visibles:
+  a_la_cle: Vous avez ouvert le coffre
+paragraphes:
+  1:
+    texte: Un carrefour. Une torche brûle au mur.
+    effets:
+      - gagne: torche
+    choix:
+      - {libelle: Affronter le gobelin, vers: 2}
+      - {libelle: Sauter le gouffre, vers: 3}
+      - libelle: Ouvrir la porte
+        vers: 6
+        si: [{objet: clé}]
+      - libelle: Passage des forts
+        vers: 6
+        si: [{stat: habilete, min: 99}]
+  2:
+    texte: Un gobelin vous barre la route.
+    combat: {ennemi: Gobelin, habilete: 5, endurance: 4, victoire: 4, defaite: 7, fuite: 1}
+  3:
+    texte: Le gouffre est large.
+    test: {stat: chance, reussite: 4, echec: 5}
+  4:
+    texte: Un coffre contient une clé.
+    effets:
+      - gagne: clé
+      - pose_flag: a_la_cle
+    choix:
+      - {libelle: Revenir au carrefour, vers: 1}
+  5:
+    texte: Vous tombez lourdement.
+    effets:
+      - {stat: endurance, delta: -3}
+    choix:
+      - {libelle: Remonter, vers: 1}
+  6:
+    texte: La lumière du jour. Vous êtes libre.
+    fin: victoire
+  7:
+    texte: Le gobelin vous achève.
+    fin: mort
+  8:
+    texte: Une potion.
+    effets:
+      - {stat: endurance, delta: 50}
+      - perd: épée
+      - retire_flag: a_la_cle
+    choix:
+      - {libelle: Continuer, vers: 1}

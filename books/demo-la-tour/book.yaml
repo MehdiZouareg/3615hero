@@ -1,0 +1,240 @@
+titre: La Tour de Cendre
+auteur: 3615 HEROS
+resume: >-
+  Chaque nuit, la cloche de la vieille tour sonne, et chaque matin la cendre
+  recouvre un peu plus le village de Morne-Val. Ceux qui la respirent
+  grisonnent, se taisent, puis s'effritent. On vous a payé pour monter
+  là-haut et faire taire la cloche. Personne n'en est redescendu.
+regles: |
+  Votre personnage a trois caractéristiques.
+  HABILETÉ : votre adresse au combat. ENDURANCE : votre vie ; à zéro, vous mourez. CHANCE : elle baisse d'un point chaque fois que vous la tentez.
+  COMBAT : à chaque assaut, vous et l'ennemi lancez deux dés et ajoutez votre HABILETÉ. Le plus fort total blesse l'autre de 2 points d'ENDURANCE.
+  TESTS : lancez deux dés. Si le total ne dépasse pas la caractéristique testée, c'est réussi.
+  Aucune caractéristique ne peut dépasser son total de départ.
+systeme_combat: defis_fantastiques
+personnage:
+  stats:
+    habilete: 1d6+6
+    endurance: 2d6+12
+    chance: 1d6+6
+  inventaire: [épée, lanterne]
+depart: 1
+flags_visibles:
+  secret_cloche: Vous connaissez le secret de la cloche
+  corbeau_libre: Un corbeau vous doit la liberté
+paragraphes:
+  1:
+    illustration:
+      - "......##..##..##........"
+      - "......##..##..##........"
+      - "......##########....##.."
+      - "......##########...####."
+      - "......##########...####."
+      - "......####..####....##.."
+      - "......####..####........"
+      - "......####..####........"
+      - "......##########........"
+      - "......##########........"
+      - "......##########........"
+      - "......##########........"
+      - "......####..####........"
+      - "......###....###........"
+      - "......###....###........"
+      - ".....####....####......."
+      - "....#####....#####......"
+      - "########################"
+    texte: |
+      Le soir tombe quand vous atteignez le pied de la tour. Elle se dresse au bout de la lande, noire, plus haute que dans les récits. La cendre crisse sous vos bottes comme une neige sale.
+      La grande porte bâille sur ses gonds. Plus à gauche, un pan de mur s'est effondré, découvrant un escalier qui s'enfonce sous terre.
+    choix:
+      - {libelle: Entrer par la grande porte, vers: 2}
+      - {libelle: Descendre par la brèche, vers: 3}
+  2:
+    texte: |
+      Le vestibule sent le feu froid. Entre deux armures rongées, quelque chose se déplie : un grand chien, ou ce qu'il en reste, des os tenus ensemble par une suie épaisse. Ses orbites vides se tournent vers votre lanterne.
+      Derrière vous, la brèche du mur est encore à portée de course.
+    combat: {ennemi: Chien d'os, habilete: 6, endurance: 6, victoire: 4, fuite: 3}
+  3:
+    texte: |
+      Les marches débouchent dans une crypte basse, inondée jusqu'aux chevilles. Votre lanterne révèle des niches creusées dans les murs, chacune fermée d'une dalle fendue. Au fond, un escalier étroit remonte vers l'intérieur de la tour.
+    choix:
+      - {libelle: Fouiller les niches, vers: 5}
+      - {libelle: Prendre l'escalier, vers: 4}
+  4:
+    texte: |
+      Vous voici sur le premier palier. L'escalier à vis continue de monter dans le noir. Dans le mur, une porte de chêne cloutée porte une serrure d'argent terni, sans une trace de cendre, comme si quelqu'un l'essuyait chaque jour.
+    choix:
+      - libelle: Ouvrir la porte avec la clé d'argent
+        vers: 8
+        si: [{objet: clé d'argent}]
+      - {libelle: Monter l'escalier, vers: 9}
+      - libelle: Descendre fouiller la crypte
+        vers: 3
+        si: [{sans_objet: clé d'argent}]
+  5:
+    texte: |
+      Vous glissez le bras dans la niche la plus profonde. Vos doigts rencontrent du tissu, des os, puis un métal froid et lisse. Au même instant, quelque chose se referme sur votre poignet.
+    test: {stat: chance, reussite: 6, echec: 7, libelle: Tenter votre chance}
+  6:
+    illustration:
+      - "..####.............."
+      - ".##..##............."
+      - ".#....##############"
+      - ".#....##############"
+      - ".##..##.......##.##."
+      - "..####........##.##."
+    texte: |
+      Vous arrachez votre bras d'un coup sec. La chose lâche prise avec un soupir de poussière, et vous retombez assis dans l'eau, serrant dans votre poing une petite clé d'argent.
+    effets:
+      - gagne: clé d'argent
+    choix:
+      - {libelle: Prendre l'escalier, vers: 4}
+  7:
+    texte: |
+      La poigne est celle d'un étau. Elle vous tire vers le fond de la niche, votre épaule heurte la pierre, et des ongles vous labourent l'avant-bras avant que vous ne parveniez à vous dégager. Vos doigts sont vides. Dans la niche, le métal a tinté en retombant.
+    effets:
+      - {stat: endurance, delta: -4}
+    choix:
+      - {libelle: Fuir par l'escalier, vers: 4}
+      - {libelle: Plonger de nouveau le bras, vers: 5}
+  8:
+    texte: |
+      La clé tourne sans bruit. Derrière la porte, une bibliothèque ronde, épargnée par la cendre. Sur le pupitre, un registre est resté ouvert. L'écriture se défait de ligne en ligne : « La cloche ne sonne pas, elle bat. J'ai mis mon cœur dans le battant pour ne plus mourir. Que nul n'y jette le sel. »
+      Près du registre, une bourse de sel consacré, scellée de cire, et un flacon d'eau claire que vous videz d'un trait. Vos forces reviennent.
+    effets:
+      - gagne: sel consacré
+      - pose_flag: secret_cloche
+      - {stat: endurance, delta: 4}
+    choix:
+      - {libelle: Reprendre l'escalier, vers: 9}
+  9:
+    texte: |
+      L'escalier se resserre. À mi-hauteur, trois marches manquent : il n'en reste que les moignons scellés dans le mur, au-dessus d'un vide dont votre lanterne ne trouve pas le fond.
+    test: {stat: habilete, reussite: 10, echec: 11, libelle: Franchir le vide}
+  10:
+    texte: |
+      Le second palier ouvre sur un laboratoire. Un homme en tablier est penché sur la table ; il ne bouge pas, et vous comprenez qu'il est fait de cendre tassée, jusqu'aux cils. Dans une cage pendue au plafond, un corbeau vous regarde. « Ouvre », dit-il d'une voix d'enfant. Sur la table, une fiole noire est débouchée, encore pleine.
+    choix:
+      - {libelle: Libérer le corbeau, vers: 12}
+      - {libelle: Boire la fiole noire, vers: 14}
+      - {libelle: Continuer à monter, vers: 13}
+  11:
+    texte: |
+      Votre pied glisse sur le deuxième moignon. Vous vous rattrapez de justesse au suivant, le souffle coupé, les côtes contre la pierre, et vous vous hissez de l'autre côté à la force des bras.
+    effets:
+      - {stat: endurance, delta: -3}
+    choix:
+      - {libelle: Reprendre votre souffle et monter, vers: 10}
+  12:
+    illustration:
+      - "......####......"
+      - ".....######....."
+      - "....###.####...."
+      - "..##########...."
+      - "....#########..."
+      - ".....#########.."
+      - "......#########."
+      - ".......########."
+      - "........####.###"
+      - ".......#..#....."
+      - "......##.##....."
+      - "................"
+    texte: |
+      Le loquet cède. Le corbeau saute sur votre épaule, s'ébroue, et laisse tomber dans votre main une de ses plumes. « Là-haut, il n'a plus qu'un œil qui voit. Appelle, et je le lui prendrai. » Puis il file par la meurtrière.
+    effets:
+      - gagne: plume noire
+      - pose_flag: corbeau_libre
+    choix:
+      - {libelle: Continuer à monter, vers: 13}
+  13:
+    texte: |
+      Les dernières marches mènent à une porte de bronze. Devant elle, le tas de cendre que vous preniez pour un éboulis se redresse, prend des épaules, des bras, une tête sans visage. Il n'y a pas d'autre chemin, et l'escalier derrière vous s'est rempli de fumée.
+    combat: {ennemi: Gardien de cendre, habilete: 8, endurance: 8, victoire: 15, defaite: 16}
+  14:
+    texte: |
+      Le liquide n'a aucun goût. Vous reposez la fiole, et votre main laisse sur le verre une empreinte grise. Vous voulez crier ; votre voix tombe en poussière. Au matin, il y aura deux statues penchées sur la table.
+    fin: mort
+  15:
+    illustration:
+      - ".......##......."
+      - "......####......"
+      - ".....######....."
+      - "....########...."
+      - "....########...."
+      - "....########...."
+      - "...##########..."
+      - "...##########..."
+      - "..############.."
+      - ".##############."
+      - ".##############."
+      - ".......##......."
+      - "......####......"
+      - ".......##......."
+      - "................"
+    texte: |
+      Le gardien s'éparpille. La porte de bronze s'ouvre sur la chambre de la cloche. Elle est là, énorme, et sous elle un vieillard desséché tient la corde à deux mains, soudé à elle par la peau. Maître Orcan lève vers vous un œil laiteux et un œil vif.
+      « Encore un », dit-il, et la cloche commence à se balancer.
+    choix:
+      - {libelle: Attaquer Orcan, vers: 17}
+      - {libelle: Trancher la corde, vers: 18}
+      - libelle: Jeter le sel sur le battant
+        vers: 19
+        si: [{flag: secret_cloche}, {objet: sel consacré}]
+      - libelle: Appeler le corbeau
+        vers: 20
+        si: [{objet: plume noire}]
+  16:
+    texte: |
+      Le poing du gardien vous traverse comme une bourrasque. Vous tombez à genoux, la bouche pleine de cendre, et vous sentez votre corps se défaire grain à grain. Le tas, devant la porte, sera un peu plus haut pour le prochain visiteur.
+    fin: mort
+  17:
+    texte: |
+      Vous chargez. Orcan ne lâche pas la corde : c'est la cloche qui se bat pour lui, et chaque coup de battant vous frappe à la poitrine comme une masse.
+    combat: {ennemi: Maître Orcan, habilete: 10, endurance: 10, victoire: 21, defaite: 22}
+  18:
+    texte: |
+      Votre lame mord le chanvre. La corde claque, Orcan hurle, et la cloche, libérée, s'arrache de son joug. Le plancher se fend sous elle. Tout l'étage bascule vers le vide.
+    test: {stat: chance, reussite: 24, echec: 25, libelle: Sauter vers l'escalier}
+  19:
+    texte: |
+      Vous brisez le sceau et lancez le sel à pleine poignée. Il grésille sur le bronze du battant, qui se met à saigner une rouille épaisse. Orcan se plie en deux, la main sur la poitrine. La cloche ne bat plus que faiblement. C'est le moment.
+    effets:
+      - perd: sel consacré
+    combat: {ennemi: Orcan affaibli, habilete: 7, endurance: 6, victoire: 21, defaite: 22}
+  20:
+    texte: |
+      Vous levez la plume. Une ombre entre par l'abat-son, et le corbeau s'abat sur le visage du vieillard. Quand il s'envole, Orcan n'a plus d'œil vif. Il frappe au hasard, à grands coups de battant.
+    effets:
+      - perd: plume noire
+    choix:
+      - {libelle: Frapper tant qu'il est aveugle, vers: 26}
+  21:
+    texte: |
+      Orcan s'affaisse le long de la corde, vidé comme une outre. Mais la cloche se balance toujours, d'elle-même, et sous vos pieds la tour s'est mise à trembler. Des pierres se détachent de la voûte.
+    choix:
+      - libelle: Briser le battant de la cloche
+        vers: 23
+        si: [{flag: secret_cloche}]
+      - {libelle: Fuir avant que tout s'écroule, vers: 24}
+  22:
+    texte: |
+      Le dernier coup de cloche vous cueille en pleine poitrine. Vous n'entendez plus rien. Vous voyez seulement vos mains devenir grises, puis la corde, que quelque chose vous force à saisir. Il faudra bien quelqu'un pour sonner, demain soir.
+    fin: mort
+  23:
+    texte: |
+      Vous savez où frapper. Vous abattez votre épée sur le battant, à l'endroit où le bronze est plus sombre. Il se fend. Dedans, quelque chose de rouge et de sec tombe en poudre.
+      Le silence qui suit est le premier depuis des années. Vous redescendez sans hâte. Dehors, il pleut : une vraie pluie, qui lave la lande. À Morne-Val, au matin, les enfants ont recommencé à parler.
+    fin: victoire
+  24:
+    texte: |
+      Vous dévalez l'escalier tandis que la tour se défait derrière vous. Vous roulez dans la lande à l'instant où elle s'effondre sur elle-même, dans un nuage qui met une heure à retomber.
+      La cloche ne sonnera plus. Mais la nuit, en collant l'oreille au sol, les gens de Morne-Val jurent entendre battre quelque chose sous les décombres. Et vous, depuis ce soir-là, vous toussez gris.
+    fin: victoire
+  25:
+    texte: |
+      Vous sautez trop tard. Le plancher se dérobe, et vous tombez avec la cloche, dans son ombre, tout le long de la tour. Elle sonne une dernière fois en touchant le fond.
+    fin: mort
+  26:
+    texte: |
+      Orcan tourne la tête au bruit de vos pas, une seconde trop tard à chaque fois. La cloche bat à contretemps.
+    combat: {ennemi: Orcan aveuglé, habilete: 8, endurance: 8, victoire: 21, defaite: 22}

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Émulateur Minitel local — 3615 HEROS</title>
+<style>
+  :root { --bg:#1b1a17; --case:#cfc8b4; --case2:#b9b19a; --ink:#22201b; --key:#3a3832; --keytxt:#f1ede2; --green:#3f8f4f; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:#ddd; font:14px/1.4 system-ui, sans-serif; }
+  main { display:flex; flex-wrap:wrap; gap:20px; padding:16px; justify-content:center; align-items:flex-start; }
+  .minitel { background:linear-gradient(var(--case), var(--case2)); border-radius:14px; padding:18px 18px 14px; color:var(--ink); }
+  .tube { background:#000; border-radius:10px; padding:10px; }
+  canvas { display:block; width:640px; max-width:calc(100vw - 80px); height:auto; background:#000; outline:none; }
+  .keys { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:12px; }
+  button { font:600 12px system-ui, sans-serif; padding:8px 4px; border:0; border-radius:5px; background:var(--key); color:var(--keytxt); cursor:pointer; }
+  button:hover { filter:brightness(1.25); }
+  button.envoi { background:var(--green); }
+  button.cnx { background:#8a3b32; }
+  button small { display:block; font-weight:400; opacity:.65; }
+  .brand { display:flex; justify-content:space-between; font-size:12px; margin-top:8px; opacity:.75; }
+  aside { width:340px; max-width:100%; }
+  aside h2 { font-size:13px; margin:0 0 6px; color:#aaa; font-weight:600; }
+  #log { background:#111; border:1px solid #333; border-radius:6px; padding:8px; height:420px; overflow:auto; font:11px/1.45 ui-monospace, Consolas, monospace; white-space:pre-wrap; word-break:break-all; }
+  #log .req { color:#8fc1ff; } #log .res { color:#b6e3a1; } #log .err { color:#ff8f8f; }
+  .hint { color:#999; font-size:12px; margin-top:10px; }
+  kbd { background:#333; border-radius:3px; padding:0 4px; font:11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <section class="minitel">
+    <div class="tube"><canvas id="screen" width="1280" height="1000" tabindex="0"></canvas></div>
+    <div class="keys">
+      <button data-f="SOMMAIRE">Sommaire<small>F2</small></button>
+      <button data-f="ANNULATION">Annulation<small>Échap</small></button>
+      <button data-f="RETOUR">Retour<small>Page préc.</small></button>
+      <button data-f="REPETITION">Répétition<small>F3</small></button>
+      <button data-f="GUIDE">Guide<small>F1</small></button>
+      <button data-f="CORRECTION">Correction<small>Retour arr.</small></button>
+      <button data-f="SUITE">Suite<small>Page suiv.</small></button>
+      <button data-f="ENVOI" class="envoi">Envoi<small>Entrée</small></button>
+      <button data-f="CNXFIN" class="cnx" style="grid-column:1 / -1">Connexion / Fin</button>
+    </div>
+    <div class="brand"><span>Émulateur local</span><span id="status">déconnecté</span></div>
+  </section>
+  <aside>
+    <h2>Échanges avec le service</h2>
+    <div id="log"></div>
+    <p class="hint">Cliquez sur l'écran puis tapez au clavier. <kbd>Entrée</kbd> Envoi,
+    <kbd>⌫</kbd> Correction, <kbd>Échap</kbd> Annulation, <kbd>Page ↓/↑</kbd> Suite / Retour,
+    <kbd>F1</kbd> Guide, <kbd>F2</kbd> Sommaire, <kbd>F3</kbd> Répétition.</p>
+    <p class="hint">Cette page imite la passerelle MiniPavi (champ de saisie, écho, touches
+    acceptées). Elle sert à la mise au point, pas de preuve pour un vrai Minitel.</p>
+  </aside>
+</main>
+<script>
+"use strict";
+// ============================================================ écran Vidéotex
+const COLS = 40, ROWS = 25, CW = 16, CH = 20;
+const PALETTE = ["#000000", "#ff3b30", "#35d04b", "#ffe14a", "#3a6bff", "#e55cff", "#49e0f0", "#ffffff"];
+const ACCENTS = {0x41: "̀", 0x42: "́", 0x43: "̂", 0x48: "̈", 0x4B: "̧"};
+const G2 = {0x23: "£", 0x27: "§", 0x2C: "←", 0x2D: "↑", 0x2E: "→", 0x2F: "↓", 0x30: "°", 0x31: "±",
+            0x38: "÷", 0x3C: "¼", 0x3D: "½", 0x3E: "¾", 0x6A: "Œ", 0x7A: "œ", 0x7B: "ß"};
+const G0 = {0x60: "─", 0x7C: "│", 0x7E: "‾", 0x7F: "█"};
+
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+ctx.scale(2, 2);
+
+const blank = () => ({ch: " ", g1: 0, fg: 7, inv: false, blink: false, sx: 1, sy: 1, px: 0, py: 0});
+let grid, cur, attr, g1, saved, last, cursorOn, pending;
+
+function resetAttr() { attr = {fg: 7, inv: false, blink: false, dw: false, dh: false}; g1 = false; }
+function resetScreen() {
+  grid = Array.from({length: ROWS}, () => Array.from({length: COLS}, blank));
+  cur = {row: 1, col: 1}; saved = null; last = null; cursorOn = false; pending = [];
+  resetAttr();
+}
+
+function put(ch, mosaic) {
+  const w = (!mosaic && attr.dw) ? 2 : 1, h = (!mosaic && attr.dh) ? 2 : 1;
+  if (cur.col + w - 1 > COLS) { cur.col = 1; if (cur.row > 0) cur.row = cur.row >= 24 ? 1 : cur.row + 1; }
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) {
+    const r = cur.row - (h - 1) + dy, c = cur.col + dx;
+    if (r >= 0 && r < ROWS && c >= 1 && c <= COLS)
+      grid[r][c - 1] = {ch: mosaic ? " " : ch, g1: mosaic || 0, fg: attr.fg, inv: !mosaic && attr.inv,
+                        blink: attr.blink, sx: w, sy: h, px: dx, py: dy};
+  }
+  cur.col += w;
+  last = () => put(ch, mosaic);
+}
+
+function feed(bytes) {
+  const data = pending.concat(Array.from(bytes)); pending = [];
+  let i = 0;
+  const need = n => { if (i + n > data.length) { pending = data.slice(i); i = data.length; return false; } return true; };
+  while (i < data.length) {
+    const b = data[i];
+    if (b === 0x1F) {
+      if (!need(3)) break;
+      const r = data[i + 1] - 0x40, c = data[i + 2] - 0x40;
+      if (r === 0 && cur.row !== 0) saved = {...cur};
+      if (r >= 0 && r <= 24 && c >= 1 && c <= 40) cur = {row: r, col: c};
+      resetAttr(); i += 3;
+    } else if (b === 0x1B) {
+      if (!need(2)) break;
+      const a = data[i + 1];
+      if (a >= 0x40 && a <= 0x47) attr.fg = a - 0x40;
+      else if (a === 0x48) attr.blink = true;
+      else if (a === 0x49) attr.blink = false;
+      else if (a >= 0x4C && a <= 0x4F) { attr.dh = (a & 1) === 1; attr.dw = a >= 0x4E; }
+      else if (a === 0x5C) attr.inv = false;
+      else if (a === 0x5D) attr.inv = true;
+      i += 2;
+    } else if (b === 0x19) {
+      if (!need(2)) break;
+      const a = data[i + 1];
+      if (ACCENTS[a]) {
+        if (!need(3)) break;
+        put((String.fromCharCode(data[i + 2]) + ACCENTS[a]).normalize("NFC"), 0); i += 3;
+      } else { put(G2[a] || "?", 0); i += 2; }
+    } else if (b === 0x12) {
+      if (!need(2)) break;
+      for (let n = data[i + 1] - 0x40; n > 0 && last; n--) last();
+      i += 2;
+    } else if (b === 0x0C) {
+      for (let r = 1; r < ROWS; r++) grid[r] = Array.from({length: COLS}, blank);
+      cur = {row: 1, col: 1}; resetAttr(); i++;
+    } else if (b === 0x18) { for (let c = cur.col; c <= COLS; c++) grid[cur.row][c - 1] = blank(); i++; }
+    else if (b === 0x1E) { cur = {row: 1, col: 1}; resetAttr(); i++; }
+    else if (b === 0x0A) { if (cur.row === 0) { if (saved) cur = {...saved}; } else cur.row = cur.row >= 24 ? 1 : cur.row + 1; i++; }
+    else if (b === 0x0B) { if (cur.row > 1) cur.row--; i++; }
+    else if (b === 0x08) { if (cur.col > 1) cur.col--; i++; }
+    else if (b === 0x09) { if (cur.col < COLS) cur.col++; i++; }
+    else if (b === 0x0D) { cur.col = 1; i++; }
+    else if (b === 0x0E) { g1 = true; i++; }
+    else if (b === 0x0F) { g1 = false; i++; }
+    else if (b === 0x11) { cursorOn = true; i++; }
+    else if (b === 0x14) { cursorOn = false; i++; }
+    else if (b >= 0x20 && b <= 0x7F) {
+      if (g1) put(" ", b); else put(G0[b] || String.fromCharCode(b), 0);
+      i++;
+    } else i++;
+  }
+  draw();
+}
+
+let phase = true;
+function draw() {
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, COLS * CW, ROWS * CH);
+  ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  ctx.font = '22px "Cascadia Mono", Consolas, "DejaVu Sans Mono", "Courier New", monospace';
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const cell = grid[r][c], x = c * CW, y = r * CH;
+    const fg = PALETTE[cell.inv ? 0 : cell.fg], bg = cell.inv ? PALETTE[cell.fg] : null;
+    if (bg) { ctx.fillStyle = bg; ctx.fillRect(x, y, CW, CH); }
+    if (cell.blink && !phase) continue;
+    ctx.fillStyle = fg;
+    if (cell.g1) {
+      const code = cell.g1, bw = CW / 2, bh = CH / 3;
+      [[1, 0, 0], [2, 1, 0], [4, 0, 1], [8, 1, 1], [16, 0, 2], [64, 1, 2]].forEach(([bit, bx, by]) => {
+        if (code & bit) ctx.fillRect(x + bx * bw, y + Math.floor(by * bh), bw, Math.ceil(bh) + (by < 2 ? 0.5 : 0));
+      });
+    } else if (cell.ch !== " ") {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, CW, CH); ctx.clip();
+      ctx.translate(x - cell.px * CW, y - cell.py * CH);
+      ctx.scale(cell.sx, cell.sy);
+      if (cell.ch === "─") ctx.fillRect(0, CH / 2 - 1, CW, 2);
+      else if (cell.ch === "│") ctx.fillRect(CW / 2 - 1, 0, 2, CH);
+      else if (cell.ch === "‾") ctx.fillRect(0, 1, CW, 2);
+      else if (cell.ch === "_") ctx.fillRect(0, CH - 3, CW, 2);
+      else if (cell.ch === "█") ctx.fillRect(0, 0, CW, CH);
+      else ctx.fillText(cell.ch, CW / 2, CH / 2 + 1, CW);
+      ctx.restore();
+    }
+  }
+  if (cursorOn && phase && cur.col <= COLS) {
+    ctx.fillStyle = "#fff"; ctx.fillRect((cur.col - 1) * CW, cur.row * CH + CH - 4, CW, 3);
+  }
+}
+setInterval(() => { phase = !phase; draw(); }, 500);
+
+// Texte de l'écran, pour les contrôles automatiques et le débogage.
+window.screenText = () => grid.map(row => row.map(c => c.g1 ? "#" : c.ch).join("").replace(/\s+$/, "")).join("\n");
+
+// ============================================================ fausse passerelle MiniPavi
+const MSK = {SOMMAIRE: 1, RETOUR: 4, REPETITION: 8, GUIDE: 16, SUITE: 64, ENVOI: 128};
+const gw = {connected: false, uniqueId: "", url: "/service/", context: "", echo: false, command: null, buffer: [], busy: false};
+const logEl = document.getElementById("log"), statusEl = document.getElementById("status");
+
+function log(kind, text) {
+  const div = document.createElement("div"); div.className = kind; div.textContent = text;
+  logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.childNodes.length > 200) logEl.removeChild(logEl.firstChild);
+}
+const pos = (row, col) => [0x1F, 0x40 + row, 0x40 + col];
+const ascii = s => Array.from(s || "").map(ch => { const c = ch.charCodeAt(0); return c >= 32 && c < 127 ? c : 0x3F; });
+
+function offline(message) {
+  gw.connected = false; gw.command = null; statusEl.textContent = "déconnecté";
+  resetScreen();
+  feed([0x0C, 0x14, ...pos(10, 9), 0x1B, 0x46, ...ascii("EMULATEUR MINITEL LOCAL"),
+        ...pos(13, 5), ...ascii("Appuyez sur  CONNEXION / FIN"),
+        ...pos(14, 5), ...ascii("pour appeler le service."),
+        ...(message ? [...pos(18, 2), 0x1B, 0x41, ...ascii(message.slice(0, 38))] : [])]);
+}
+
+async function send(fctn) {
+  if (gw.busy) return;
+  gw.busy = true;
+  const body = {PAVI: {version: "emu-local", uniqueId: gw.uniqueId, remoteAddr: "127.0.0.1", typesocket: "websocket",
+                       versionminitel: "Cv;", content: gw.buffer, context: gw.context, datas: "", fctn, webmedia: 0}};
+  log("req", `→ ${fctn}  content=${JSON.stringify(gw.buffer)}`);
+  try {
+    const r = await fetch(gw.url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const raw = await r.text();
+    let j;
+    try { j = JSON.parse(raw); } catch (e) { throw new Error("Réponse non JSON : " + raw.slice(0, 200)); }
+    if (fctn === "FIN") return;
+    const bytes = Uint8Array.from(atob(j.content || ""), ch => ch.charCodeAt(0));
+    const cmd = j.COMMAND || null;
+    log("res", `← ${bytes.length} octets, echo=${j.echo}` + (cmd ? `, ${cmd.name} ${JSON.stringify(cmd.param || {})}` : ", pas de commande"));
+    gw.context = j.context || ""; gw.echo = j.echo === "on";
+    if (j.next) gw.url = new URL(j.next, location.href).pathname;
+    feed(bytes);
+    gw.command = null;
+    if (cmd && cmd.name === "InputTxt") {
+      const p = cmd.param;
+      gw.command = p; gw.buffer = [String(p.prefill || "")];
+      feed([...pos(p.y, p.x), ...ascii((p.spacechar || " ").repeat(p.l)), ...pos(p.y, p.x), ...ascii(p.prefill),
+            p.cursor === "off" ? 0x14 : 0x11]);
+    } else if (cmd && cmd.name === "libCnx") {
+      offline("Le service a libere la connexion.");
+    } else if (cmd) {
+      log("err", "commande non gérée par l'émulateur : " + cmd.name);
+    }
+    if (j.directcall === "yes" || j.directcall === "yes-cnx") {
+      gw.busy = false;
+      return send(j.directcall === "yes" ? "DIRECT" : "DIRECTCNX");
+    }
+  } catch (e) {
+    log("err", String(e.message || e));
+    if (fctn !== "FIN") offline("Service indisponible");
+  } finally { gw.busy = false; }
+}
+
+function connect() {
+  resetScreen();
+  gw.connected = true; gw.url = "/service/"; gw.context = ""; gw.buffer = []; gw.command = null;
+  gw.uniqueId = String(Date.now()) + String(Math.floor(1000 + Math.random() * 9000));
+  statusEl.textContent = "connecté · " + gw.uniqueId;
+  send("CNX");
+}
+
+function fkey(name) {
+  if (name === "CNXFIN") {
+    if (!gw.connected) return connect();
+    send("FIN"); return offline("");
+  }
+  if (!gw.connected || gw.busy) return;
+  const p = gw.command;
+  if (p) {  // saisie en cours : Correction et Annulation restent locales
+    const text = gw.buffer[0] || "";
+    if (name === "CORRECTION") {
+      if (text.length) { gw.buffer = [text.slice(0, -1)]; const sp = ascii(p.spacechar || " ")[0]; feed([0x08, sp, 0x08]); }
+      return;
+    }
+    if (name === "ANNULATION") {
+      gw.buffer = [""]; feed([...pos(p.y, p.x), ...ascii((p.spacechar || " ").repeat(p.l)), ...pos(p.y, p.x)]);
+      return;
+    }
+    if (!(p.validwith & (MSK[name] || 0))) { log("err", `touche ${name} ignorée (absente de validwith=${p.validwith})`); return; }
+  }
+  send(name);
+}
+
+function typed(ch) {
+  const p = gw.command;
+  if (!gw.connected || gw.busy || !p) return;  // sans saisie en cours, les caractères sont perdus
+  const text = gw.buffer[0] || "";
+  if (text.length >= p.l) return;
+  gw.buffer = [text + ch];
+  if (gw.echo) feed(ascii(p.char ? p.char : ch));
+}
+
+document.querySelectorAll("button[data-f]").forEach(b => b.addEventListener("click", () => { fkey(b.dataset.f); canvas.focus(); }));
+const KEYMAP = {Enter: "ENVOI", Backspace: "CORRECTION", Escape: "ANNULATION", PageDown: "SUITE", PageUp: "RETOUR",
+                F1: "GUIDE", F2: "SOMMAIRE", F3: "REPETITION"};
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (KEYMAP[e.key]) { e.preventDefault(); fkey(KEYMAP[e.key]); }
+  else if (e.key.length === 1) { const c = e.key.charCodeAt(0); if (c >= 32 && c < 127) { e.preventDefault(); typed(e.key); } }
+});
+
+// Pour piloter l'émulateur depuis la console ou un test.
+window.minitel = {fkey, typed, connect, state: gw, text: () => window.screenText()};
+
+offline("");
+canvas.focus();
+</script>
+</body>
+</html>
